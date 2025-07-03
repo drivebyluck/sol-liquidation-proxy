@@ -1,94 +1,22 @@
 const express = require('express');
+const axios = require('axios');
 const cors = require('cors');
-const { Connection, PublicKey } = require('@solana/web3.js');
-const {
-  DriftClient,
-  DLOBBuilder,
-  UserMap,
-  convertToNumber,
-  getMarketsAndOraclesForSubscription,
-  initialize,
-  getSpotMarketAccount,
-  SpotMarketAccount,
-  PerpMarketAccount
-} = require('@drift-labs/sdk');
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
+const API_KEY = process.env.COINGLASS_API_KEY;
+
 app.use(cors());
 
-app.get('/liquidations', async (req, res) => {
+const headers = {
+  'accept': 'application/json',
+  'coinglassSecret': API_KEY
+};
+
+app.get('/sol-data', async (req, res) => {
   try {
-    await initialize();
-
-    const connection = new Connection('https://api.mainnet-beta.solana.com');
-    const programId = new PublicKey('DMnho5n4QX...VTaJr'); // Replace with Drift V2 ID if needed
-
-    const driftClient = new DriftClient({
-      connection,
-      programID: programId,
-      accountSubscription: {
-        type: 'websocket',
-        commitment: 'processed'
-      }
-    });
-
-    await driftClient.subscribe();
-
-    const userMap = new UserMap(driftClient);
-    await userMap.subscribe();
-
-    const dlob = new DLOBBuilder(userMap, Date.now() / 1000).build();
-
-    const marketIndex = 1; // SOL/USDC market index on Drift
-    const users = userMap.users;
-
-    const liquidationZones = [];
-
-    for (const user of users.values()) {
-      const positions = user.getUserAccount().perpPositions || [];
-
-      for (const pos of positions) {
-        if (pos.baseAssetAmount.isZero()) continue;
-
-        if (pos.marketIndex !== marketIndex) continue;
-
-        const liquidationPrice = await driftClient.getLiquidationPrice(user, pos.marketIndex);
-
-        const size = convertToNumber(pos.baseAssetAmount, 9);
-
-        liquidationZones.push({
-          price: liquidationPrice.toNumber(),
-          size,
-        });
-      }
-    }
-
-    const currentPrice = await driftClient.getOracleDataForPerpMarket(marketIndex);
-    const markPrice = currentPrice.price.toNumber();
-
-    const longZones = liquidationZones
-      .filter(z => z.price > markPrice)
-      .sort((a, b) => b.size - a.size)
-      .slice(0, 5)
-      .map(z => ({ direction: 'Long', ...z }));
-
-    const shortZones = liquidationZones
-      .filter(z => z.price < markPrice)
-      .sort((a, b) => b.size - a.size)
-      .slice(0, 5)
-      .map(z => ({ direction: 'Short', ...z }));
-
-    res.json({
-      markPrice,
-      data: [...shortZones, ...longZones]
-    });
-  } catch (err) {
-    console.error('Drift error:', err);
-    res.status(500).json({ error: 'Failed to fetch liquidation data from Drift' });
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(`Drift proxy server running on port ${PORT}`);
-});
+    const [liquidationRes, openInterestRes, tradeCountRes, volumeRes] = await Promise.all([
+      axios.get('https://open-api.coinglass.com/public/v2/liquidation_chart?symbol=SOL', { headers }),
+      axios.get('https://open-api.coinglass.com/public/v2/open_interest_chart?symbol=SOL', { headers }),
+      axios.get('https://open-api.coinglass.com/public/v2/future_trading_volume?symbol=SOL', {
