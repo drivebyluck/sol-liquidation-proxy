@@ -14,8 +14,10 @@ const API_KEY = process.env.COINGLASS_API_KEY;
 // Proxy route
 app.get('/api/liquidation', async (req, res) => {
   const symbol = req.query.symbol || 'SOLUSDT';
+  const model = req.query.model || '1';
+
   try {
-    const response = await axios.get(`https://open-api-v4.coinglass.com/api/futures/liquidation/heatmap/model1?symbol=${symbol}`, {
+    const response = await axios.get(`https://open-api-v4.coinglass.com/api/futures/liquidation/heatmap/model${model}?symbol=${symbol}`, {
       headers: {
         'accept': 'application/json',
         'coinglassSecret': API_KEY
@@ -23,7 +25,12 @@ app.get('/api/liquidation', async (req, res) => {
     });
     res.json(response.data);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch liquidation data', details: err.message });
+    res.status(500).json({
+      error: 'Failed to fetch liquidation data',
+      details: err.message,
+      symbol: symbol,
+      model: model
+    });
   }
 });
 
