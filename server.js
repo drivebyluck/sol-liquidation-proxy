@@ -1,22 +1,32 @@
 const express = require('express');
-const axios = require('axios');
 const cors = require('cors');
-require('dotenv').config();
+const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-const API_KEY = process.env.COINGLASS_API_KEY;
+const PORT = process.env.PORT || 3000;
 
+// Allow all origins (safe here because it's your server)
 app.use(cors());
 
-const headers = {
-  'accept': 'application/json',
-  'coinglassSecret': API_KEY
-};
+// Environment variable for your CoinGlass API key
+const API_KEY = process.env.COINGLASS_API_KEY;
 
-app.get('/sol-data', async (req, res) => {
+// Proxy route
+app.get('/api/liquidation', async (req, res) => {
+  const symbol = req.query.symbol || 'SOLUSDT';
   try {
-    const [liquidationRes, openInterestRes, tradeCountRes, volumeRes] = await Promise.all([
-      axios.get('https://open-api.coinglass.com/public/v2/liquidation_chart?symbol=SOL', { headers }),
-      axios.get('https://open-api.coinglass.com/public/v2/open_interest_chart?symbol=SOL', { headers }),
-      axios.get('https://open-api.coinglass.com/public/v2/future_trading_volume?symbol=SOL', {
+    const response = await axios.get(`https://open-api-v4.coinglass.com/api/futures/liquidation/heatmap/model1?symbol=${symbol}`, {
+      headers: {
+        'accept': 'application/json',
+        'coinglassSecret': API_KEY
+      }
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch liquidation data', details: err.message });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Proxy server listening on port ${PORT}`);
+});
